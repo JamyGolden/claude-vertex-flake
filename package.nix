@@ -1,17 +1,31 @@
+# Claude Code Vertex AI Wrapper
+#
+# Builds a shell wrapper that:
+# 1. Handles Google Cloud authentication (interactive login if needed)
+# 2. Configures the GCP project (from args, file, env, or interactive selection)
+# 3. Sets up Vertex AI environment variables
+# 4. Launches Claude Code CLI
 {
-  writeShellApplication,
-  google-cloud-sdk,
+  # Configuration options (passed from lib.mkClaude)
+  modelName ? null,
+  smallModelName ? null,
+  vertexRegion ? null,
+  disablePromptCaching ? true,
+  projectId ? null,
+  # Dependencies (injected by callPackage)
   claude-code,
-  gum,
-  jq,
+  fzf,
+  google-cloud-sdk,
+  jaq,
+  lib,
+  writeShellApplication,
 }: let
-  vertexRegion = "us-east5";
-  modelName = "claude-sonnet-4-5";
-  smallModelName = "claude-3-5-haiku";
-
-  select-gcloud-project = writeShellApplication {
+  # Interactive GCP project selector using fzf
+  # Fetches available projects and lets user choose
+  # Returns the selected project ID on stdout
+  selectGcloudProject = writeShellApplication {
     name = "select-gcloud-project";
-    runtimeInputs = [google-cloud-sdk gum jq];
+    runtimeInputs = [fzf google-cloud-sdk jaq];
     text = ''
       set -euo pipefail
 
@@ -21,7 +35,7 @@
         exit 1
       fi
 
-      PROJECT_LIST=$(echo "$PROJECTS_JSON" | jq -r '.[] | "\(.projectId) - \(.name)"')
+      PROJECT_LIST=$(echo "$PROJECTS_JSON" | jaq -r '.[] | "\(.projectId) - \(.name)"')
       PROJECT_COUNT=$(echo "$PROJECT_LIST" | wc -l | tr -d ' ')
 
       if [ -z "$PROJECT_LIST" ] || [ "$PROJECT_COUNT" -eq 0 ]; then
@@ -33,7 +47,7 @@
         echo "$PROJECT_ID"
       else
         echo "Select a Google Cloud project:" >&2
-        SELECTED_PROJECT=$(echo "$PROJECT_LIST" | gum choose --height=10)
+        SELECTED_PROJECT=$(echo "$PROJECT_LIST" | fzf)
         PROJECT_ID=$(echo "$SELECTED_PROJECT" | cut -d' ' -f1)
         echo "Selected project: $PROJECT_ID" >&2
         echo "$PROJECT_ID"
@@ -43,55 +57,93 @@
 in
   writeShellApplication {
     name = "claude";
-    runtimeInputs = [google-cloud-sdk claude-code select-gcloud-project];
+    meta = {
+      description = "Vend Claude Code CLI wrapper with Vertex AI integration";
+      license = lib.licenses.unfree;
+      platforms = lib.platforms.unix;
+      mainProgram = "claude";
+    };
+    runtimeInputs = [google-cloud-sdk claude-code selectGcloudProject];
     text = ''
       set -euo pipefail
+
+      GOOGLE_CLOUD_PROJECT=""
+
+      ${
+        if projectId != null
+        then ''
+          GOOGLE_CLOUD_PROJECT="${projectId}"
+        ''
+        else ""
+      }
+
+      if [ -z "$GOOGLE_CLOUD_PROJECT" ]; then
+        GOOGLE_CLOUD_PROJECT="''${ANTHROPIC_VERTEX_PROJECT_ID:-}"
+      fi
 
       # Check if already authenticated
       if ! gcloud auth application-default print-access-token &>/dev/null; then
         echo "Authentication required. Opening browser..."
         gcloud auth login
+
         # For some reason, we must re-auth
         # cf. https://stackoverflow.com/a/42059661/55246
         gcloud auth application-default login
 
         # Project selection
-        GOOGLE_CLOUD_PROJECT=$(select-gcloud-project)
+        GOOGLE_CLOUD_PROJECT="$(select-gcloud-project)"
 
         gcloud config set project "$GOOGLE_CLOUD_PROJECT"
         gcloud services enable aiplatform.googleapis.com
-      else
+      elif [ -z "$GOOGLE_CLOUD_PROJECT" ]; then
         echo "Already authenticated with Google Cloud."
         # Get current project
-        GOOGLE_CLOUD_PROJECT=$(gcloud config get-value project)
+        GOOGLE_CLOUD_PROJECT="$(gcloud config get-value project)"
         if [ -z "$GOOGLE_CLOUD_PROJECT" ] || [ "$GOOGLE_CLOUD_PROJECT" = "(unset)" ]; then
-          echo "Error: No project configured. Please reset your gcloud config and try again." >&2
-          exit 1
+          GOOGLE_CLOUD_PROJECT="$(select-gcloud-project)"
         else
           echo "Using configured project: $GOOGLE_CLOUD_PROJECT"
         fi
       fi
 
-      # https://docs.anthropic.com/en/docs/claude-code/google-vertex-ai
+      if [ -z "$GOOGLE_CLOUD_PROJECT" ] || [ "$GOOGLE_CLOUD_PROJECT" = "(unset)" ]; then
+        echo "Error: No project configured. Please reset your gcloud config and try again." >&2
+        exit 1
+      fi
 
       # Enable Vertex AI integration
-      export CLAUDE_CODE_USE_VERTEX=1
-      export CLOUD_ML_REGION=${vertexRegion}
+      export CLAUDE_CODE_USE_VERTEX="1"
       export ANTHROPIC_VERTEX_PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
+      ${
+        if vertexRegion != null
+        then "export CLOUD_ML_REGION=${vertexRegion}"
+        else ""
+      }
 
-      # Optional: Disable prompt caching if needed
-      export DISABLE_PROMPT_CACHING=1
+      ${
+        if modelName != null
+        then "export ANTHROPIC_MODEL=${modelName}"
+        else ""
+      }
 
-      # Optional: Override regions for specific models
-      export VERTEX_REGION_CLAUDE_3_5_HAIKU=us-central1
-      export VERTEX_REGION_CLAUDE_3_5_SONNET=us-east5
-      export VERTEX_REGION_CLAUDE_3_7_SONNET=us-east5
-      export VERTEX_REGION_CLAUDE_4_0_OPUS=europe-west4
-      export VERTEX_REGION_CLAUDE_4_0_SONNET=us-east5
-      export VERTEX_REGION_CLAUDE_4_5_SONNET=us-east5
+      ${
+        if smallModelName != null
+        then "export ANTHROPIC_SMALL_FAST_MODEL=${smallModelName}"
+        else ""
+      }
 
-      export ANTHROPIC_MODEL='${modelName}'
-      export ANTHROPIC_SMALL_FAST_MODEL='${smallModelName}'
+      ${
+        if disablePromptCaching
+        then "export DISABLE_PROMPT_CACHING=1"
+        else ""
+      }
+
+      if \
+        [ -z "$ANTHROPIC_MODEL" ] || \
+        [ -z "$ANTHROPIC_SMALL_FAST_MODEL" ] || \
+        [ -z "$CLOUD_ML_REGION" ]; then
+        echo "Missing the model, smallModel or region"
+      fi
 
       echo "Launching Claude Code..."
       exec claude "$@"
