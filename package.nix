@@ -4,16 +4,14 @@
   claude-code,
   gum,
   jq,
-}:
-
-let
+}: let
   vertexRegion = "us-east5";
   modelName = "claude-sonnet-4-5";
   smallModelName = "claude-3-5-haiku";
 
   select-gcloud-project = writeShellApplication {
     name = "select-gcloud-project";
-    runtimeInputs = [ google-cloud-sdk gum jq ];
+    runtimeInputs = [google-cloud-sdk gum jq];
     text = ''
       set -euo pipefail
 
@@ -43,59 +41,59 @@ let
     '';
   };
 in
-writeShellApplication {
-  name = "claude";
-  runtimeInputs = [ google-cloud-sdk claude-code select-gcloud-project ];
-  text = ''
-    set -euo pipefail
+  writeShellApplication {
+    name = "claude";
+    runtimeInputs = [google-cloud-sdk claude-code select-gcloud-project];
+    text = ''
+      set -euo pipefail
 
-    # Check if already authenticated
-    if ! gcloud auth application-default print-access-token &>/dev/null; then
-      echo "Authentication required. Opening browser..."
-      gcloud auth login
-      # For some reason, we must re-auth
-      # cf. https://stackoverflow.com/a/42059661/55246
-      gcloud auth application-default login
+      # Check if already authenticated
+      if ! gcloud auth application-default print-access-token &>/dev/null; then
+        echo "Authentication required. Opening browser..."
+        gcloud auth login
+        # For some reason, we must re-auth
+        # cf. https://stackoverflow.com/a/42059661/55246
+        gcloud auth application-default login
 
-      # Project selection
-      GOOGLE_CLOUD_PROJECT=$(select-gcloud-project)
+        # Project selection
+        GOOGLE_CLOUD_PROJECT=$(select-gcloud-project)
 
-      gcloud config set project "$GOOGLE_CLOUD_PROJECT"
-      gcloud services enable aiplatform.googleapis.com
-    else
-      echo "Already authenticated with Google Cloud."
-      # Get current project
-      GOOGLE_CLOUD_PROJECT=$(gcloud config get-value project)
-      if [ -z "$GOOGLE_CLOUD_PROJECT" ] || [ "$GOOGLE_CLOUD_PROJECT" = "(unset)" ]; then
-        echo "Error: No project configured. Please reset your gcloud config and try again." >&2
-        exit 1
+        gcloud config set project "$GOOGLE_CLOUD_PROJECT"
+        gcloud services enable aiplatform.googleapis.com
       else
-        echo "Using configured project: $GOOGLE_CLOUD_PROJECT"
+        echo "Already authenticated with Google Cloud."
+        # Get current project
+        GOOGLE_CLOUD_PROJECT=$(gcloud config get-value project)
+        if [ -z "$GOOGLE_CLOUD_PROJECT" ] || [ "$GOOGLE_CLOUD_PROJECT" = "(unset)" ]; then
+          echo "Error: No project configured. Please reset your gcloud config and try again." >&2
+          exit 1
+        else
+          echo "Using configured project: $GOOGLE_CLOUD_PROJECT"
+        fi
       fi
-    fi
 
-    # https://docs.anthropic.com/en/docs/claude-code/google-vertex-ai
+      # https://docs.anthropic.com/en/docs/claude-code/google-vertex-ai
 
-    # Enable Vertex AI integration
-    export CLAUDE_CODE_USE_VERTEX=1
-    export CLOUD_ML_REGION=${vertexRegion}
-    export ANTHROPIC_VERTEX_PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
+      # Enable Vertex AI integration
+      export CLAUDE_CODE_USE_VERTEX=1
+      export CLOUD_ML_REGION=${vertexRegion}
+      export ANTHROPIC_VERTEX_PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
 
-    # Optional: Disable prompt caching if needed
-    export DISABLE_PROMPT_CACHING=1
+      # Optional: Disable prompt caching if needed
+      export DISABLE_PROMPT_CACHING=1
 
-    # Optional: Override regions for specific models
-    export VERTEX_REGION_CLAUDE_3_5_HAIKU=us-central1
-    export VERTEX_REGION_CLAUDE_3_5_SONNET=us-east5
-    export VERTEX_REGION_CLAUDE_3_7_SONNET=us-east5
-    export VERTEX_REGION_CLAUDE_4_0_OPUS=europe-west4
-    export VERTEX_REGION_CLAUDE_4_0_SONNET=us-east5
-    export VERTEX_REGION_CLAUDE_4_5_SONNET=us-east5
+      # Optional: Override regions for specific models
+      export VERTEX_REGION_CLAUDE_3_5_HAIKU=us-central1
+      export VERTEX_REGION_CLAUDE_3_5_SONNET=us-east5
+      export VERTEX_REGION_CLAUDE_3_7_SONNET=us-east5
+      export VERTEX_REGION_CLAUDE_4_0_OPUS=europe-west4
+      export VERTEX_REGION_CLAUDE_4_0_SONNET=us-east5
+      export VERTEX_REGION_CLAUDE_4_5_SONNET=us-east5
 
-    export ANTHROPIC_MODEL='${modelName}'
-    export ANTHROPIC_SMALL_FAST_MODEL='${smallModelName}'
+      export ANTHROPIC_MODEL='${modelName}'
+      export ANTHROPIC_SMALL_FAST_MODEL='${smallModelName}'
 
-    echo "Launching Claude Code..."
-    exec claude "$@"
-  '';
-}
+      echo "Launching Claude Code..."
+      exec claude "$@"
+    '';
+  }
