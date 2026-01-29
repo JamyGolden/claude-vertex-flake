@@ -4,23 +4,3 @@
 # Nix
 result
 result-*
-
-# Common OS files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Editor files
-.idea/
-*.swp
-*.swo
-*~
-.#*
-\#*#
-.*.un~
-
-.claude

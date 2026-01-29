@@ -1,11 +1,6 @@
 {
   description = "Vertex development environment";
 
-  nixConfig = {
-    extra-substituters = "https://cache.nixos.asia/oss";
-    extra-trusted-public-keys = "oss:KO872wNJkCDgmGN3xy9dT89WAhvv13EiKncTtHDItVU=";
-  };
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
@@ -31,7 +26,7 @@
           config.allowUnfreePredicate = pkg: builtins.elem (pkg.pname or pkg.name or "") ["claude-code"];
         };
 
-        formatter = pkgs.nixpkgs-fmt;
+        formatter = pkgs.alejandra;
 
         packages = {
           default = vertex-claude;
