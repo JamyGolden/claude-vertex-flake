@@ -1,7 +1,3 @@
-# Claude Vertex Flake
-#
-# A Nix flake that wraps Claude Code CLI with automatic Google Cloud Vertex AI
-# authentication and configuration.
 {
   description = "Claude Code CLI wrapper with Vertex AI integration";
   inputs = {
@@ -90,8 +86,6 @@
       default = self.lib.mkClaude {inherit pkgs;};
     });
 
-    # Development shell (use: nix develop)
-    # Includes the Claude wrapper and formatting tools
     devShells = forAllSystems (_system: pkgs: {
       default = pkgs.mkShell {
         buildInputs = [
@@ -101,49 +95,6 @@
       };
     });
 
-    # lib.mkClaude - Build a customized Claude Code wrapper
-    #
-    # Arguments:
-    #   pkgs (required)
-    #     Type: nixpkgs
-    #     The nixpkgs instance to use for building
-    #
-    #   modelName (optional)
-    #     Type: string
-    #     Default: "claude-sonnet-4-5"
-    #     The primary Claude model to use (ANTHROPIC_MODEL)
-    #
-    #   smallModelName (optional)
-    #     Type: string
-    #     Default: "claude-3-5-haiku"
-    #     The fast model for lightweight tasks (ANTHROPIC_SMALL_FAST_MODEL)
-    #
-    #   vertexRegion (optional)
-    #     Type: string
-    #     Default: "europe-west1"
-    #     Google Cloud region for Vertex AI (CLOUD_ML_REGION)
-    #     See: https://cloud.google.com/vertex-ai/docs/general/locations
-    #
-    #   disablePromptCaching (optional)
-    #     Type: bool
-    #     Default: true
-    #     Whether to disable prompt caching (DISABLE_PROMPT_CACHING)
-    #
-    #   projectId (optional)
-    #     Type: string | null
-    #     Default: null
-    #     Hardcoded GCP project ID. Takes precedence over all other methods.
-    #
-    # Returns: derivation
-    #   A wrapper script that configures and launches Claude Code
-    #
-    # Example:
-    #   lib.mkClaude {
-    #     inherit pkgs;
-    #     modelName = "claude-sonnet-4-20250514";
-    #     vertexRegion = "us-central1";
-    #     disablePromptCaching = false;
-    #   }
     lib.mkClaude = {
       pkgs,
       modelName ? "claude-sonnet-4-5",
@@ -168,23 +119,10 @@
         jaq = pkgs.jaq;
       };
 
-    # Overlay for integrating into nixpkgs
-    # Adds: pkgs.claude-vertex
-    #
-    # Usage in flake:
-    #   nixpkgs.overlays = [ claude-vertex.overlays.default ];
     overlays.default = final: prev: {
       claude-vertex = self.lib.mkClaude {pkgs = final;};
     };
 
-    # Home Manager module
-    #
-    # Usage in home.nix:
-    #   imports = [ claude-vertex.homeManagerModules.default ];
-    #   programs.claude-vertex = {
-    #     enable = true;
-    #     modelName = "claude-sonnet-4-20250514";
-    #   };
     homeModules.default = {
       config,
       lib,
@@ -195,31 +133,26 @@
     in {
       options.programs.claude-vertex = {
         enable = lib.mkEnableOption "Claude Code with Vertex AI";
-
         modelName = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = "claude-sonnet-4-5";
           description = "The primary Claude model to use (ANTHROPIC_MODEL)";
         };
-
         smallModelName = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = "claude-3-5-haiku";
           description = "The fast model for lightweight tasks (ANTHROPIC_SMALL_FAST_MODEL)";
         };
-
         vertexRegion = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = "europe-west1";
           description = "Google Cloud region for Vertex AI (CLOUD_ML_REGION)";
         };
-
         disablePromptCaching = lib.mkOption {
           type = lib.types.bool;
           default = true;
           description = "Whether to disable prompt caching (DISABLE_PROMPT_CACHING)";
         };
-
         projectId = lib.mkOption {
           type = lib.types.nullOr lib.types.str;
           default = null;
