@@ -1,12 +1,25 @@
 {
   "nodes": {
+    "claude-code-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 499162500,
+        "narHash": "sha256-CLLCtVK3TeXFZ8wBnRRHNc2MoUt7lTdMJwz8sZHpkFM=",
+        "type": "tarball",
+        "url": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1764950072,
-        "narHash": "sha256-BmPWzogsG2GsXZtlT+MTcAWeDK5hkbGRZTeZNW42fwA=",
+        "lastModified": 1775036866,
+        "narHash": "sha256-ZojAnPuCdy657PbTq5V0Y+AHKhZAIwSIT2cb8UgAz/U=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "f61125a668a320878494449750330ca58b78c557",
+        "rev": "6201e203d09599479a3b3450ed24fa81537ebc4e",
         "type": "github"
       },
       "original": {
@@ -18,6 +31,7 @@
     },
     "root": {
       "inputs": {
+        "claude-code-src": "claude-code-src",
         "nixpkgs": "nixpkgs"
       }
     }

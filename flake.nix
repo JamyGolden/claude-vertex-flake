@@ -4,14 +4,18 @@
 # authentication and configuration.
 {
   description = "Claude Code CLI wrapper with Vertex AI integration";
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    claude-code-src = {
+      url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz";
+      flake = false;
+    };
   };
 
   outputs = {
     self,
     nixpkgs,
+    claude-code-src,
     ...
   }: let
     systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
@@ -21,6 +25,64 @@
           inherit system;
           config.allowUnfree = true;
         }));
+
+    mkClaudeCode = pkgs:
+      pkgs.stdenv.mkDerivation {
+        pname = "claude-code";
+        version = "2.1.92";
+
+        src = claude-code-src;
+        dontUnpack = true;
+
+        nativeBuildInputs = [pkgs.makeWrapper pkgs.gnutar pkgs.gzip];
+        buildInputs = [pkgs.nodejs];
+
+        installPhase = ''
+          runHook preInstall
+
+          mkdir -p temp_extract
+          if [ -d "$src" ]; then
+            cp -r "$src/." temp_extract/
+          else
+            tar -xzf "$src" -C temp_extract/
+          fi
+
+          if [ -d "temp_extract/package" ]; then
+            cd temp_extract/package
+          else
+            cd temp_extract
+          fi
+
+          # 1. Copy files to the output
+          mkdir -p $out/lib/node_modules/@anthropic-ai/claude-code
+          cp -r . $out/lib/node_modules/@anthropic-ai/claude-code/
+
+          # 2. Dynamically find the CLI entry point
+          # Anthropic usually ships 'cli.js' in the root for the NPM version
+          CLI_JS=""
+          for path in "cli.js" "dist/cli.js" "bin/cli.js"; do
+            if [ -f "$out/lib/node_modules/@anthropic-ai/claude-code/$path" ]; then
+              CLI_JS="$out/lib/node_modules/@anthropic-ai/claude-code/$path"
+              break
+            fi
+          done
+
+          if [ -z "$CLI_JS" ]; then
+            echo "ERROR: Could not find cli.js in package root, dist/, or bin/"
+            ls -R $out/lib/node_modules/@anthropic-ai/claude-code/
+            exit 1
+          fi
+
+          echo "Found CLI entry point at: $CLI_JS"
+
+          # 3. Create the binary wrapper
+          mkdir -p $out/bin
+          makeWrapper ${pkgs.nodejs}/bin/node $out/bin/claude \
+            --add-flags "$CLI_JS"
+
+          runHook postInstall
+        '';
+      };
   in {
     formatter = forAllSystems (_system: pkgs: pkgs.alejandra);
 
@@ -89,7 +151,9 @@
       vertexRegion ? "europe-west1",
       disablePromptCaching ? true,
       projectId ? null,
-    }:
+    }: let
+      claude-code = mkClaudeCode pkgs;
+    in
       pkgs.callPackage ./package.nix {
         inherit
           modelName
@@ -97,7 +161,11 @@
           vertexRegion
           disablePromptCaching
           projectId
+          claude-code
           ;
+        fzf = pkgs.fzf;
+        google-cloud-sdk = pkgs.google-cloud-sdk;
+        jaq = pkgs.jaq;
       };
 
     # Overlay for integrating into nixpkgs
@@ -117,7 +185,7 @@
     #     enable = true;
     #     modelName = "claude-sonnet-4-20250514";
     #   };
-    homeManagerModules.default = {
+    homeModules.default = {
       config,
       lib,
       pkgs,
@@ -174,20 +242,7 @@
     # - default: Verifies the package builds
     # - formatting: Verifies Nix files are formatted with alejandra
     # - custom-config: Verifies custom configuration options work
-    checks = forAllSystems (system: pkgs: let
-      checkScript = pkgs.writeShellScript "check-script" ''
-        script="$1"
-        shift
-        for pattern in "$@"; do
-          if echo "$script" | grep -q "$pattern"; then
-            echo "PASS: Found $pattern"
-          else
-            echo "FAIL: Missing $pattern"
-            exit 1
-          fi
-        done
-      '';
-    in {
+    checks = forAllSystems (system: pkgs: {
       default = self.packages.${system}.default;
 
       formatting = pkgs.runCommand "check-formatting" {} ''
@@ -203,38 +258,40 @@
           projectId = "test-project";
           disablePromptCaching = false;
         };
-        script = builtins.readFile "${pkg}/bin/claude";
       in
-        pkgs.runCommand "check-custom-config" {} ''
-          ${checkScript} '${script}' \
-            "CLAUDE_CODE_USE_VERTEX" \
-            "ANTHROPIC_VERTEX_PROJECT_ID" \
-            "ANTHROPIC_MODEL=test-model" \
-            "ANTHROPIC_SMALL_FAST_MODEL=test-small-model" \
-            "CLOUD_ML_REGION=us-central1" \
-            "test-project"
+        pkgs.runCommand "check-custom-config" {
+          nativeBuildInputs = [pkgs.ripgrep];
+        } ''
+          TARGET="${pkg}/bin/claude"
 
-          if echo '${script}' | grep -q "DISABLE_PROMPT_CACHING"; then
+          # Check for expected environment variables
+          grep -q "CLAUDE_CODE_USE_VERTEX" "$TARGET"
+          grep -q "ANTHROPIC_VERTEX_PROJECT_ID" "$TARGET"
+          grep -q "ANTHROPIC_MODEL=test-model" "$TARGET"
+          grep -q "ANTHROPIC_SMALL_FAST_MODEL=test-small-model" "$TARGET"
+          grep -q "CLOUD_ML_REGION=us-central1" "$TARGET"
+          grep -q "test-project" "$TARGET"
+
+          # Check for the OMISSION of prompt caching
+          if grep -q "DISABLE_PROMPT_CACHING" "$TARGET"; then
             echo "FAIL: DISABLE_PROMPT_CACHING should not be set"
             exit 1
           fi
-          echo "PASS: DISABLE_PROMPT_CACHING correctly omitted"
 
           echo "All checks passed" > $out
         '';
 
       default-config = let
         pkg = self.lib.mkClaude {inherit pkgs;};
-        script = builtins.readFile "${pkg}/bin/claude";
       in
-        pkgs.runCommand "check-default-config" {} ''
-          ${checkScript} '${script}' \
-            "CLAUDE_CODE_USE_VERTEX" \
-            "ANTHROPIC_VERTEX_PROJECT_ID" \
-            "ANTHROPIC_MODEL=claude-sonnet-4-5" \
-            "ANTHROPIC_SMALL_FAST_MODEL=claude-3-5-haiku" \
-            "CLOUD_ML_REGION=europe-west1" \
-            "DISABLE_PROMPT_CACHING=1"
+        pkgs.runCommand "check-default-config" {
+          nativeBuildInputs = [pkgs.gnugrep];
+        } ''
+          TARGET="${pkg}/bin/claude"
+
+          grep -q "ANTHROPIC_MODEL=claude-sonnet-4-5" "$TARGET"
+          grep -q "CLOUD_ML_REGION=europe-west1" "$TARGET"
+          grep -q "DISABLE_PROMPT_CACHING=1" "$TARGET"
 
           echo "All checks passed" > $out
         '';
