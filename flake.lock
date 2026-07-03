@@ -1,25 +1,32 @@
 {
   "nodes": {
-    "claude-code-src": {
-      "flake": false,
+    "nix-claude-code": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
       "locked": {
-        "lastModified": 499162500,
-        "narHash": "sha256-CLLCtVK3TeXFZ8wBnRRHNc2MoUt7lTdMJwz8sZHpkFM=",
-        "type": "tarball",
-        "url": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz"
+        "lastModified": 1783113769,
+        "narHash": "sha256-NL+0uUZbJfre/K7+8HuM+2qgRJHPOcmIY2mCGKKavn8=",
+        "owner": "ryoppippi",
+        "repo": "nix-claude-code",
+        "rev": "461ae41f8cf53e021400e122b3a3fa559cf987f1",
+        "type": "github"
       },
       "original": {
-        "type": "tarball",
-        "url": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz"
+        "owner": "ryoppippi",
+        "repo": "nix-claude-code",
+        "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1775036866,
-        "narHash": "sha256-ZojAnPuCdy657PbTq5V0Y+AHKhZAIwSIT2cb8UgAz/U=",
+        "lastModified": 1782723713,
+        "narHash": "sha256-oPXCU/SSUokcGaJREHibG1CBX3+s/W7orDWQOZDsEeQ=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "6201e203d09599479a3b3450ed24fa81537ebc4e",
+        "rev": "b5aa0fbd538984f6e3d201be0005b4463d8b09f8",
         "type": "github"
       },
       "original": {
@@ -31,7 +38,7 @@
     },
     "root": {
       "inputs": {
-        "claude-code-src": "claude-code-src",
+        "nix-claude-code": "nix-claude-code",
         "nixpkgs": "nixpkgs"
       }
     }

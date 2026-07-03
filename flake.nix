@@ -2,16 +2,16 @@
   description = "Claude Code CLI wrapper with Vertex AI integration";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    claude-code-src = {
-      url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz";
-      flake = false;
+    nix-claude-code = {
+      url = "github:ryoppippi/nix-claude-code";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
   outputs = {
     self,
     nixpkgs,
-    claude-code-src,
+    nix-claude-code,
     ...
   }: let
     systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
@@ -21,64 +21,6 @@
           inherit system;
           config.allowUnfree = true;
         }));
-
-    mkClaudeCode = pkgs:
-      pkgs.stdenv.mkDerivation {
-        pname = "claude-code";
-        version = "2.1.92";
-
-        src = claude-code-src;
-        dontUnpack = true;
-
-        nativeBuildInputs = [pkgs.makeWrapper pkgs.gnutar pkgs.gzip];
-        buildInputs = [pkgs.nodejs];
-
-        installPhase = ''
-          runHook preInstall
-
-          mkdir -p temp_extract
-          if [ -d "$src" ]; then
-            cp -r "$src/." temp_extract/
-          else
-            tar -xzf "$src" -C temp_extract/
-          fi
-
-          if [ -d "temp_extract/package" ]; then
-            cd temp_extract/package
-          else
-            cd temp_extract
-          fi
-
-          # 1. Copy files to the output
-          mkdir -p $out/lib/node_modules/@anthropic-ai/claude-code
-          cp -r . $out/lib/node_modules/@anthropic-ai/claude-code/
-
-          # 2. Dynamically find the CLI entry point
-          # Anthropic usually ships 'cli.js' in the root for the NPM version
-          CLI_JS=""
-          for path in "cli.js" "dist/cli.js" "bin/cli.js"; do
-            if [ -f "$out/lib/node_modules/@anthropic-ai/claude-code/$path" ]; then
-              CLI_JS="$out/lib/node_modules/@anthropic-ai/claude-code/$path"
-              break
-            fi
-          done
-
-          if [ -z "$CLI_JS" ]; then
-            echo "ERROR: Could not find cli.js in package root, dist/, or bin/"
-            ls -R $out/lib/node_modules/@anthropic-ai/claude-code/
-            exit 1
-          fi
-
-          echo "Found CLI entry point at: $CLI_JS"
-
-          # 3. Create the binary wrapper
-          mkdir -p $out/bin
-          makeWrapper ${pkgs.nodejs}/bin/node $out/bin/claude \
-            --add-flags "$CLI_JS"
-
-          runHook postInstall
-        '';
-      };
   in {
     formatter = forAllSystems (_system: pkgs: pkgs.alejandra);
 
@@ -103,7 +45,8 @@
       disablePromptCaching ? true,
       projectId ? null,
     }: let
-      claude-code = mkClaudeCode pkgs;
+      system = pkgs.stdenv.hostPlatform.system;
+      claude-code = nix-claude-code.packages.${system}.claude;
     in
       pkgs.callPackage ./package.nix {
         inherit
