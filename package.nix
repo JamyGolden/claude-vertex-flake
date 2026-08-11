@@ -116,19 +116,19 @@ in
       export ANTHROPIC_VERTEX_PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
       ${
         if vertexRegion != null
-        then "export CLOUD_ML_REGION=${vertexRegion}"
+        then ''export CLOUD_ML_REGION="${vertexRegion}"''
         else ""
       }
 
       ${
         if modelName != null
-        then "export ANTHROPIC_MODEL=${modelName}"
+        then ''export ANTHROPIC_MODEL="${modelName}"''
         else ""
       }
 
       ${
         if smallModelName != null
-        then "export ANTHROPIC_SMALL_FAST_MODEL=${smallModelName}"
+        then ''export ANTHROPIC_SMALL_FAST_MODEL="${smallModelName}"''
         else ""
       }
 
